@@ -1133,6 +1133,53 @@ def api_balance():
     return jsonify({"balance": get_balance(uid), "orders": [{"id": r[0], "product_id": r[1], "status": r[2]} for r in rows]})
 
 
+@app.after_request
+def add_cors(resp):
+    resp.headers["Access-Control-Allow-Origin"] = "*"
+    resp.headers["Access-Control-Allow-Headers"] = "Content-Type"
+    return resp
+
+
+@app.route("/api/state")
+def api_state():
+    # Mini App syncWithBotServer expects: ok, settings, products, admin_requests, balance
+    try:
+        uid = int(request.args.get("user_id", "0"))
+    except ValueError:
+        uid = 0
+    products = []
+    for pid, name, photo, file_id, desc, price in list_products():
+        products.append({"id": pid, "name": name, "price": price, "description": desc or "", "has_photo": bool(photo), "has_file": bool(file_id), "file_name": f"{name}.zip"})
+    admin_requests = []
+    if uid:
+        conn = db()
+        rows = conn.execute("SELECT id, method, amount, trxid, status FROM balance_requests WHERE buyer_id = ? ORDER BY id DESC LIMIT 20", (uid,)).fetchall()
+        conn.close()
+        admin_requests = [{"id": r[0], "method": r[1], "amount": r[2], "trxid": r[3], "status": r[4]} for r in rows]
+    return jsonify({"ok": True, "balance": get_balance(uid) if uid else 0, "settings": {"bkash_number": get_setting("bkash_number") or "", "nagad_number": get_setting("nagad_number") or "", "rocket_number": get_setting("rocket_number") or "", "support_username": get_setting("support_username") or ""}, "products": products, "admin_requests": admin_requests})
+
+
+@app.route("/photo/<int:product_id>")
+def photo_product(product_id):
+    product = get_product(product_id)
+    if not product or not product[2]:
+        return "No photo", 404
+    token = os.environ.get("TELEGRAM_BOT_TOKEN", "")
+    if not token:
+        return "Token nei", 500
+    try:
+        file_id = product[2]
+        with urllib.request.urlopen(f"https://api.telegram.org/bot{token}/getFile?file_id={urllib.parse.quote(file_id)}") as resp:
+            info = json.loads(resp.read().decode("utf-8"))
+        path = info["result"]["file_path"]
+        with urllib.request.urlopen(f"https://api.telegram.org/file/bot{token}/{path}") as resp:
+            data = resp.read()
+        return Response(data, mimetype="image/jpeg")
+    except Exception as exc:
+        print(f"Photo failed: {exc}")
+        return "Photo failed", 500
+
+
 @app.route("/download/<int:product_id>")
 def download_product(product_id):
     # Mini App Download: approved order thakle bot server theke file download, chat-e asa lagbe na
