@@ -46,7 +46,7 @@ from telegram.ext import (
 DB_PATH = "mini_bot.db"
 
 BTN_PREMIUM = "📁 Premium Files"
-BTN_MINIAPP = "📱 Mini Bot Open"
+BTN_MINIAPP = "📱 Mini App Kholo"
 BTN_HOW = "❓ How it works"
 BTN_SUPPORT = "🛟 Support"
 BTN_BACK = "🔙 Back"
@@ -222,13 +222,9 @@ def get_order(order_id):
 
 
 def main_menu(user_id):
-    web_app_url = os.environ.get("WEB_APP_URL", "").strip()
-    if web_app_url:
-        top_btn = KeyboardButton(BTN_MINIAPP, web_app=WebAppInfo(url=web_app_url))
-    else:
-        top_btn = KeyboardButton(BTN_MINIAPP)
     rows = [
-        [top_btn],
+        [KeyboardButton(BTN_MINIAPP)],
+        [KeyboardButton(BTN_HOW), KeyboardButton(BTN_SUPPORT)],
     ]
     if is_admin(user_id):
         rows.append([KeyboardButton(BTN_ADMIN)])
@@ -284,7 +280,7 @@ async def show_main(update, user_id):
         "💎 *Premium Files — Everything in One Place.*"
     )
     if update.message:
-        await update.message.reply_text(text, reply_markup=main_menu(user_id), parse_mode="Markdown")
+        await update.message.reply_text(text, reply_markup=ReplyKeyboardRemove(), parse_mode="Markdown")
     elif update.callback_query:
         await update.callback_query.answer()
         await update.callback_query.edit_message_text(text, parse_mode="Markdown")
@@ -293,6 +289,22 @@ async def show_main(update, user_id):
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data.clear()
     await show_main(update, update.effective_user.id)
+    # Open button: mini app kholar jonno. WEB_APP_URL env-e public
+    # HTTPS URL thakle tobei button dekhano hobe. Na thakle chat bot-i cholbe.
+    web_app_url = os.environ.get("WEB_APP_URL", "").strip()
+    if web_app_url and update.message:
+        keyboard = InlineKeyboardMarkup(
+            [
+                [
+                    InlineKeyboardButton(
+                        "📱 Open Mini App", web_app=WebAppInfo(url=web_app_url)
+                    )
+                ]
+            ]
+        )
+        await update.message.reply_text(
+            "📱 Mini App khulte Open চাপো:", reply_markup=keyboard
+        )
 
 
 async def handle_webapp_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -327,7 +339,7 @@ async def handle_webapp_data(update: Update, context: ContextTypes.DEFAULT_TYPE)
             await update.message.reply_text("Product name + price লাগবে।")
             return
         conn = db()
-        conn.execute("INSERT INTO products (name, photo_id, file_id, description, price) VALUES (?, NULL, NULL, ?, ?)", (pname, pdesc, pprice))
+        conn.execute("INSERT INTO products (name, photo, file_id, description, price) VALUES (?, NULL, NULL, ?, ?)", (pname, pdesc, pprice))
         conn.commit(); conn.close()
         await update.message.reply_text(f"✅ Mini App থেকে Product Add হয়েছে: {pname} - {pprice} টাকা")
         return
@@ -970,11 +982,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await show_main(update, user_id)
         return
 
-    if text in (BTN_MINIAPP, "📱 Mini App Kholo", "Mini Bot Open"):
+    if text == BTN_MINIAPP:
         web_app_url = os.environ.get("WEB_APP_URL", "").strip()
         if web_app_url:
-            kb = InlineKeyboardMarkup([[InlineKeyboardButton("📱 Mini Bot Open", web_app=WebAppInfo(url=web_app_url))]])
-            await update.message.reply_text("📱 Mini App খুলতে নিচের বাটনে চাপো:", reply_markup=kb)
+            kb = InlineKeyboardMarkup([[InlineKeyboardButton("📱 Open Mini App", web_app=WebAppInfo(url=web_app_url))]])
+            await update.message.reply_text("📱 Mini App খুলতে Open চাপো:", reply_markup=kb)
         else:
             await update.message.reply_text("Mini App URL (WEB_APP_URL) এখনো দেওয়া হয়নি।", reply_markup=main_menu(user_id))
         return
@@ -1084,7 +1096,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
 
     await update.message.reply_text(
-        "নিচের 📱 Mini Bot Open বাটনে চাপ দিয়ে অ্যাপ ওপেন করো।",
+        "মেনু থেকে বেছে নাও, অথবা Premium Files থেকে প্রোডাক্টের নাম লিখো।",
         reply_markup=main_menu(user_id),
     )
 
